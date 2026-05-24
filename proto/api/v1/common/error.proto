@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package common.v1;
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/common;commonv1";
+
+// ErrorReason is a machine-readable error enum shared across all services.
+// Returned in the error details so clients can branch on a stable reason code
+// instead of parsing human-readable messages. In Kratos these map to error
+// metadata; each service may add its own reasons but these common ones cover
+// the cross-cutting cases.
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+
+  // Generic / transport
+  ERROR_REASON_VALIDATION_FAILED   = 1; // request failed field validation
+  ERROR_REASON_NOT_FOUND           = 2; // entity does not exist
+  ERROR_REASON_ALREADY_EXISTS      = 3; // unique-constraint conflict
+  ERROR_REASON_PERMISSION_DENIED   = 4; // caller not authorised
+  ERROR_REASON_INTERNAL            = 5; // unexpected server error
+
+  // Domain-specific (money / lifecycle)
+  ERROR_REASON_CUSTOMER_NOT_ACTIVE   = 100; // account op on non-active customer
+  ERROR_REASON_ACCOUNT_FROZEN        = 101; // money op on frozen account
+  ERROR_REASON_ACCOUNT_CLOSED        = 102; // money op on closed account
+  ERROR_REASON_INSUFFICIENT_FUNDS    = 103; // debit exceeds balance + overdraft
+  ERROR_REASON_CURRENCY_MISMATCH     = 104; // entries span multiple currencies
+  ERROR_REASON_UNBALANCED_ENTRIES    = 105; // ledger entries do not sum to zero
+  ERROR_REASON_ILLEGAL_TRANSITION    = 106; // invalid status state-machine move
+  ERROR_REASON_IDEMPOTENCY_CONFLICT  = 107; // same key, different payload
+}

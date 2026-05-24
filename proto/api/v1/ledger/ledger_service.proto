@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package ledger.v1;
+
+import "google/api/annotations.proto";
+import "v1/ledger/ledger.proto";
+import "v1/common/common.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/ledger;ledgerv1";
+
+// LedgerService is the source of truth for money movement. Intentionally
+// small: post, reverse, read a transaction, read a balance. There is
+// deliberately NO UpdateEntry or DeleteEntry — the ledger is append-only.
+//
+// Most calls originate from the Transaction service (internal gRPC). HTTP
+// annotations are provided for admin/ops access and completeness.
+service LedgerService {
+  // PostTransaction atomically applies a balanced set of entries.
+  // Validation order (all-or-nothing):
+  //   1. entries sum to zero (double-entry invariant)
+  //   2. all entries share one currency
+  //   3. no account is FROZEN or CLOSED
+  //   4. debited accounts have sufficient funds (respecting overdraft limit)
+  // Any failure → nothing is written, status = REJECTED.
+  //
+  // Idempotent: re-posting the same idempotency_key returns the original
+  // transaction rather than applying it twice.
+  rpc PostTransaction(PostTransactionRequest) returns (PostTransactionResponse) {
+    option (google.api.http) = {
+      post: "/v1/ledger/transactions"
+      body: "*"
+    };
+  }
+
+  // ReverseTransaction posts a NEW transaction with the opposite entries of
+  // an existing one. The original is never modified — the reversal is itself
+  // an auditable record.
+  rpc ReverseTransaction(ReverseTransactionRequest) returns (ReverseTransactionResponse) {
+    option (google.api.http) = {
+      post: "/v1/ledger/transactions/{transaction_id}:reverse"
+      body: "*"
+    };
+  }
+
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse) {
+    option (google.api.http) = {
+      get: "/v1/ledger/transactions/{transaction_id}"
+    };
+  }
+
+  // GetBalance returns the authoritative balance for an account.
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+    option (google.api.http) = {
+      get: "/v1/ledger/accounts/{account_id}/balance"
+    };
+  }
+}
+
+// ---- Request / Response messages ----
+
+message PostTransactionRequest {
+  // The legs of the transaction. Signed amounts (via direction) must net zero.
+  repeated Entry entries         = 1;
+  string         idempotency_key = 2;
+  string         description     = 3;
+}
+message PostTransactionResponse {
+  LedgerTransaction transaction = 1;
+}
+
+message ReverseTransactionRequest {
+  int64  transaction_id  = 1;
+  string reason          = 2;
+  string idempotency_key = 3;
+}
+message ReverseTransactionResponse {
+  LedgerTransaction transaction = 1; // the new reversing transaction
+}
+
+message GetTransactionRequest {
+  int64 transaction_id = 1;
+}
+message GetTransactionResponse {
+  LedgerTransaction transaction = 1;
+}
+
+message GetBalanceRequest {
+  int64 account_id = 1;
+}
+message GetBalanceResponse {
+  Balance balance = 1;
+}

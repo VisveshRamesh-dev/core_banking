@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package transaction.v1;
+
+import "google/api/annotations.proto";
+import "v1/transaction/transaction.proto";
+import "v1/common/common.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/transaction;transactionv1";
+
+// TransactionService is the ORCHESTRATOR. It owns no balances; it coordinates
+// Account (validation) and Ledger (money movement) to turn a business intent
+// into balanced ledger entries, handling partial failure across service
+// boundaries.
+//
+// This is the saga layer. Hard problem: a Transfer touches two services and
+// either could fail or time out. The service guarantees full completion or full
+// failure — never a half-state. Idempotency keys make client retries safe.
+service TransactionService {
+  // Transfer moves money between two internal accounts.
+  // Orchestration:
+  //   1. validate both accounts exist and are ACTIVE (Account service)
+  //   2. post a balanced debit/credit to the Ledger
+  //   3. ledger success → COMPLETED; failure → FAILED (nothing moved)
+  rpc Transfer(TransferRequest) returns (TransferResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions/transfer"
+      body: "*"
+    };
+  }
+
+  // Deposit credits an account from an external source (e.g. card top-up).
+  // The ledger entry credits the account and debits a system clearing account
+  // so the transaction remains balanced.
+  rpc Deposit(DepositRequest) returns (DepositResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions/deposit"
+      body: "*"
+    };
+  }
+
+  // Withdraw debits an account to an external destination.
+  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions/withdraw"
+      body: "*"
+    };
+  }
+
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse) {
+    option (google.api.http) = {
+      get: "/v1/transactions/{id}"
+    };
+  }
+
+  // ListAccountTransactions returns the transaction history for one account.
+  rpc ListAccountTransactions(ListAccountTransactionsRequest) returns (ListAccountTransactionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{account_id}/transactions"
+    };
+  }
+}
+
+// ---- Request / Response messages ----
+// Every money-moving request carries an idempotency_key so a client that
+// retries after a timeout never causes a double movement.
+
+message TransferRequest {
+  int64  from_account_id = 1;
+  int64  to_account_id   = 2;
+  int64  amount_minor    = 3;
+  string currency        = 4;
+  string idempotency_key = 5;
+  string description     = 6;
+}
+message TransferResponse {
+  Transaction transaction = 1;
+}
+
+message DepositRequest {
+  int64  to_account_id    = 1;
+  int64  amount_minor     = 2;
+  string currency         = 3;
+  string idempotency_key  = 4;
+  // External reference (card auth ID, NEFT UTR, etc.).
+  string source_reference = 5;
+}
+message DepositResponse {
+  Transaction transaction = 1;
+}
+
+message WithdrawRequest {
+  int64  from_account_id       = 1;
+  int64  amount_minor          = 2;
+  string currency              = 3;
+  string idempotency_key       = 4;
+  string destination_reference = 5;
+}
+message WithdrawResponse {
+  Transaction transaction = 1;
+}
+
+message GetTransactionRequest {
+  int64 id = 1;
+}
+message GetTransactionResponse {
+  Transaction transaction = 1;
+}
+
+message ListAccountTransactionsRequest {
+  int64                 account_id = 1;
+  common.v1.PageRequest page       = 2;
+}
+message ListAccountTransactionsResponse {
+  repeated Transaction   transactions = 1;
+  common.v1.PageResponse page         = 2;
+}

@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/account;accountv1";
+
+// Account belongs to exactly one customer (customer_id) but is owned by the
+// Account service. The balance shown here is a CACHED projection — the Ledger
+// service is the source of truth. We expose it for convenience and reconcile
+// against the ledger on any disagreement (ledger always wins).
+message Account {
+  // Server-generated identifier (auto-increment bigint in PostgreSQL).
+  int64 id = 1;
+  // Reference into the Customer service — never a cross-DB join.
+  int64 customer_id = 2;
+
+  common.v1.AccountType   type   = 3;
+  common.v1.AccountStatus status = 4;
+
+  // ISO-4217 currency code; fixed at open time, never changed.
+  string currency = 5;
+
+  // Cached balance projection. Authoritative balance lives in the Ledger.
+  common.v1.Money cached_balance = 6;
+
+  // Overdraft limit for CURRENT accounts (minor units). 0 for all other types.
+  int64 overdraft_limit_minor = 7;
+
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}

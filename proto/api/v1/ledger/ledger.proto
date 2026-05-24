@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package ledger.v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/ledger;ledgerv1";
+
+// Entry is one leg of a ledger transaction: a signed movement against one
+// account. Entries are IMMUTABLE once posted — there is no update or delete.
+// A mistake is corrected by posting a new, reversing transaction, preserving
+// the full audit history.
+message Entry {
+  int64                    id         = 1; // server-generated
+  int64                    account_id = 2; // which account this leg affects
+  common.v1.EntryDirection direction  = 3;
+  // Always positive; the direction carries the sign. Minor units only.
+  int64  amount_minor = 4;
+  string currency     = 5;
+}
+
+// LedgerTransaction is the atomic unit of the ledger: a set of entries that
+// together sum to zero. This is the source of truth for all money movement.
+message LedgerTransaction {
+  int64 id = 1;
+
+  // The entries (legs). At least two required; signed amounts must net to zero.
+  repeated Entry entries = 2;
+
+  common.v1.LedgerTransactionStatus status = 3;
+
+  // Human-readable description or rejection reason.
+  string description = 4;
+
+  // Idempotency key: re-posting with the same key returns the original result.
+  string idempotency_key = 5;
+
+  // Non-zero when this transaction reverses another; zero otherwise.
+  // proto3 default (0) signals "not a reversal".
+  optional int64 reverses_transaction_id = 6;
+
+  google.protobuf.Timestamp posted_at = 7;
+}
+
+// Balance is the authoritative balance of an account, derived from the sum of
+// all its posted entries. The Account service caches a copy; this is the truth.
+message Balance {
+  int64           account_id = 1;
+  common.v1.Money balance    = 2;
+  // Timestamp of the most recent entry included in this calculation.
+  google.protobuf.Timestamp as_of = 3;
+}

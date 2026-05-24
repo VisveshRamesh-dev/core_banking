@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package product.v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/product;productv1";
+
+// A Product is a TEMPLATE configured by the bank's product team — "Salary
+// Savings Account", "Kids Savings", "Home Loan - Floating". An Account is an
+// INSTANCE of a product owned by a customer (account.product_id -> product.id).
+//
+// This is the core modeling insight: account *types* are DATA, not code. The
+// bank launches a new product by adding a catalog entry, never by redeploying.
+// The ledger underneath treats every account identically (double-entry); the
+// product only governs the *rules* layered on top.
+
+// DepositConfig holds the rules for a deposit product. A zero-balance account
+// and a salary account differ ONLY in these values — same code, different data.
+message DepositConfig {
+  common.v1.DepositKind kind = 1;
+  // Minimum balance the account must maintain (minor units). 0 for
+  // zero-balance / BSBDA products.
+  int64 min_balance_minor = 2;
+  // Annual interest rate in basis points (1% = 100 bps). Integer to avoid
+  // floats — 350 = 3.5% p.a.
+  int32 interest_rate_bps = 3;
+  common.v1.InterestCalcMethod interest_calc = 4;
+  // If true, the product requires a periodic salary credit to stay eligible
+  // (the distinguishing rule of a "salary account").
+  bool requires_salary_credit = 5;
+  // Daily withdrawal cap (minor units). 0 = no limit.
+  int64 daily_withdrawal_limit_minor = 6;
+  // Below-minimum-balance penalty fee (minor units). 0 = none.
+  int64 below_min_balance_fee_minor = 7;
+  // For TERM deposits: locked tenure in months. 0 for non-term.
+  int32 term_months = 8;
+}
+
+// LoanConfig holds the rules for a lending product. Note how little it shares
+// with DepositConfig — which is exactly why a oneof (not a shared blob) is the
+// right model: each product class carries only the fields that apply to it.
+message LoanConfig {
+  int64                      min_principal_minor = 1;
+  int64                      max_principal_minor = 2;
+  common.v1.InterestType     interest_type       = 3;
+  // For FIXED: the rate in bps. For FLOATING: the spread over the benchmark.
+  int32                      interest_rate_bps   = 4;
+  common.v1.RateBenchmark    benchmark           = 5; // NONE when FIXED
+  int32                      min_tenure_months   = 6;
+  int32                      max_tenure_months   = 7;
+  common.v1.AmortizationMethod amortization      = 8;
+  bool                       collateral_required = 9; // true for secured loans
+  // Months of payment holiday allowed at the start (e.g. education loans).
+  int32 moratorium_months = 10;
+  // Penalty rate on overdue EMIs, in bps.
+  int32 penal_rate_bps = 11;
+}
+
+// Product is the bank's product catalog entry.
+message Product {
+  // Server-generated identifier (auto-increment bigint in PostgreSQL).
+  int64 id = 1;
+  // Stable short code, e.g. "SAV_SALARY", "LOAN_HOME_FLT".
+  // Immutable after creation — safe to store in external systems.
+  string code = 2;
+  // Display name, e.g. "Salary Savings Account".
+  string name = 3;
+  string description = 4;
+
+  common.v1.ProductClass  class  = 5;
+  common.v1.ProductStatus status = 6;
+
+  // Products are single-currency; ISO-4217 code fixed at creation.
+  string currency = 7;
+
+  // Exactly ONE config applies, determined by `class`. A DEPOSIT product
+  // carries deposit_config; a LOAN product carries loan_config. The oneof
+  // enforces the invariant at the type level — it is impossible to set both.
+  oneof config {
+    DepositConfig deposit_config = 8;
+    LoanConfig    loan_config    = 9;
+  }
+
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}

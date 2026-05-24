@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package account.v1;
+
+import "google/api/annotations.proto";
+import "v1/account/account.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/account;accountv1";
+
+// AccountService manages account lifecycle. It depends on CustomerService
+// (an account can only be opened for an ACTIVE customer) but never the
+// reverse — Customer has no knowledge of Accounts. Dependencies are one-way.
+service AccountService {
+  // OpenAccount creates an account for an existing, active customer.
+  // The service calls CustomerService.GetCustomer to validate the customer
+  // exists and is ACTIVE before creating (cross-service validation via gRPC).
+  rpc OpenAccount(OpenAccountRequest) returns (OpenAccountResponse) {
+    option (google.api.http) = {
+      post: "/v1/accounts"
+      body: "*"
+    };
+  }
+
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{id}"
+    };
+  }
+
+  rpc ListAccountsByCustomer(ListAccountsByCustomerRequest) returns (ListAccountsByCustomerResponse) {
+    option (google.api.http) = {
+      get: "/v1/customers/{customer_id}/accounts"
+    };
+  }
+
+  // UpdateAccountStatus transitions an account (activate, freeze, unfreeze).
+  // Transition legality is validated server-side against the state machine.
+  rpc UpdateAccountStatus(UpdateAccountStatusRequest) returns (UpdateAccountStatusResponse) {
+    option (google.api.http) = {
+      patch: "/v1/accounts/{id}/status"
+      body: "*"
+    };
+  }
+
+  // CloseAccount moves an account to CLOSED. Rejected unless the
+  // authoritative balance (from Ledger) is zero.
+  rpc CloseAccount(CloseAccountRequest) returns (CloseAccountResponse) {
+    option (google.api.http) = {
+      post: "/v1/accounts/{id}:close"
+      body: "*"
+    };
+  }
+}
+
+// ---- Request / Response messages ----
+
+message OpenAccountRequest {
+  int64                 customer_id           = 1;
+  common.v1.AccountType type                  = 2;
+  // ISO-4217 currency code; fixed at open time.
+  string                currency              = 3;
+  // Optional overdraft limit (minor units) — only honoured for CURRENT accounts.
+  int64                 overdraft_limit_minor = 4;
+}
+message OpenAccountResponse {
+  Account account = 1;
+}
+
+message GetAccountRequest {
+  int64 id = 1;
+}
+message GetAccountResponse {
+  Account account = 1;
+}
+
+message ListAccountsByCustomerRequest {
+  int64                 customer_id = 1;
+  common.v1.PageRequest page        = 2;
+}
+message ListAccountsByCustomerResponse {
+  repeated Account       accounts = 1;
+  common.v1.PageResponse page     = 2;
+}
+
+message UpdateAccountStatusRequest {
+  int64                   id         = 1;
+  common.v1.AccountStatus new_status = 2;
+  string                  reason     = 3;
+}
+message UpdateAccountStatusResponse {
+  Account account = 1;
+}
+
+message CloseAccountRequest {
+  int64  id     = 1;
+  string reason = 2;
+}
+message CloseAccountResponse {
+  Account account = 1;
+}

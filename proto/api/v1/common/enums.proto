@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+// All domain enums across every service live here so there is one
+// authoritative source. Each enum is prefixed with its domain to stay
+// unambiguous inside the shared common.v1 package.
+package common.v1;
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/common;commonv1";
+
+// ── Customer domain ──────────────────────────────────────────────────────────
+
+// KYCStatus is the regulated lifecycle of a customer record.
+//
+//   PENDING ──▶ VERIFIED ──▶ ACTIVE ──▶ SUSPENDED ──▶ ACTIVE
+//                                │
+//                                └──▶ CLOSED  (terminal — no hard delete)
+enum KYCStatus {
+  KYC_STATUS_UNSPECIFIED = 0;
+  KYC_STATUS_PENDING     = 1; // onboarded, identity not yet verified
+  KYC_STATUS_VERIFIED    = 2; // KYC documents checked
+  KYC_STATUS_ACTIVE      = 3; // fully active, can hold accounts
+  KYC_STATUS_SUSPENDED   = 4; // temporarily frozen (e.g. compliance review)
+  KYC_STATUS_CLOSED      = 5; // terminal — no re-activation
+}
+
+// CustomerType distinguishes individuals from businesses; used for product
+// eligibility and KYC document requirements.
+enum CustomerType {
+  CUSTOMER_TYPE_UNSPECIFIED = 0;
+  CUSTOMER_TYPE_INDIVIDUAL  = 1;
+  CUSTOMER_TYPE_BUSINESS    = 2;
+}
+
+// PhoneType classifies a phone number so the system knows which line to call.
+enum PhoneType {
+  PHONE_TYPE_UNSPECIFIED = 0;
+  PHONE_TYPE_MOBILE      = 1;
+  PHONE_TYPE_LANDLINE    = 2;
+  PHONE_TYPE_WORK        = 3;
+  PHONE_TYPE_FAX         = 4;
+}
+
+// AddressType classifies a postal address by its purpose.
+enum AddressType {
+  ADDRESS_TYPE_UNSPECIFIED    = 0;
+  ADDRESS_TYPE_HOME           = 1;
+  ADDRESS_TYPE_WORK           = 2;
+  ADDRESS_TYPE_REGISTERED     = 3; // company-registered / legal address
+  ADDRESS_TYPE_CORRESPONDENCE = 4; // mailing / correspondence address
+}
+
+// ── Account domain ───────────────────────────────────────────────────────────
+
+// AccountType determines product behaviour — overdraft rules, interest,
+// whether the balance may go negative, etc.
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  ACCOUNT_TYPE_SAVINGS     = 1; // balance cannot go below zero
+  ACCOUNT_TYPE_CURRENT     = 2; // may permit an overdraft up to the limit
+  ACCOUNT_TYPE_WALLET      = 3; // prepaid; balance only
+  ACCOUNT_TYPE_LOAN        = 4; // balance represents outstanding principal
+}
+
+// AccountStatus is the account lifecycle state machine.
+//
+//   PENDING ──▶ ACTIVE ──▶ FROZEN ──▶ ACTIVE
+//                  │
+//                  └──▶ CLOSED  (terminal; requires zero balance)
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_PENDING     = 1; // created, not yet activated
+  ACCOUNT_STATUS_ACTIVE      = 2; // normal operation
+  ACCOUNT_STATUS_FROZEN      = 3; // no debits/credits (compliance, dispute)
+  ACCOUNT_STATUS_CLOSED      = 4; // terminal; only allowed when balance is zero
+}
+
+// ── Ledger domain ────────────────────────────────────────────────────────────
+
+// EntryDirection is the sign of a single ledger entry against an account.
+// DEBIT decreases; CREDIT increases. The signed sum across a transaction
+// must be zero — that is the double-entry invariant.
+enum EntryDirection {
+  ENTRY_DIRECTION_UNSPECIFIED = 0;
+  ENTRY_DIRECTION_DEBIT       = 1;
+  ENTRY_DIRECTION_CREDIT      = 2;
+}
+
+// LedgerTransactionStatus reflects whether a posted ledger transaction was
+// applied. A transaction is atomic: all entries apply, or none do.
+enum LedgerTransactionStatus {
+  LEDGER_TRANSACTION_STATUS_UNSPECIFIED = 0;
+  LEDGER_TRANSACTION_STATUS_POSTED      = 1; // applied successfully
+  LEDGER_TRANSACTION_STATUS_REJECTED    = 2; // failed validation — nothing written
+}
+
+// ── Transaction (orchestration) domain ──────────────────────────────────────
+
+// TransactionKind is the business-level operation a caller initiated.
+// The orchestrator maps each kind to a balanced set of ledger entries.
+enum TransactionKind {
+  TRANSACTION_KIND_UNSPECIFIED = 0;
+  TRANSACTION_KIND_TRANSFER    = 1; // account → account
+  TRANSACTION_KIND_DEPOSIT     = 2; // external → account
+  TRANSACTION_KIND_WITHDRAWAL  = 3; // account → external
+  TRANSACTION_KIND_REVERSAL    = 4; // undo a prior transaction
+}
+
+// TransactionState tracks the orchestration saga lifecycle. A FAILED
+// transaction guarantees no net money was moved.
+enum TransactionState {
+  TRANSACTION_STATE_UNSPECIFIED = 0;
+  TRANSACTION_STATE_PENDING     = 1; // accepted, orchestration in progress
+  TRANSACTION_STATE_COMPLETED   = 2; // ledger posted successfully
+  TRANSACTION_STATE_FAILED      = 3; // rejected or compensated; no net movement
+}
+
+// ── Product domain ───────────────────────────────────────────────────────────
+
+// ProductClass is the top-level category of a bank product. It determines
+// which configuration block (oneof) applies on the Product message.
+enum ProductClass {
+  PRODUCT_CLASS_UNSPECIFIED = 0;
+  PRODUCT_CLASS_DEPOSIT     = 1; // money the customer owns (savings, current, term)
+  PRODUCT_CLASS_LOAN        = 2; // money the customer owes
+  PRODUCT_CLASS_CARD        = 3; // credit/prepaid card products
+}
+
+// ProductStatus controls whether new accounts may be opened against a product.
+// Existing accounts are unaffected when a product is retired.
+enum ProductStatus {
+  PRODUCT_STATUS_UNSPECIFIED = 0;
+  PRODUCT_STATUS_DRAFT       = 1; // being configured, not yet sellable
+  PRODUCT_STATUS_ACTIVE      = 2; // open for new accounts
+  PRODUCT_STATUS_RETIRED     = 3; // no new accounts; existing ones continue
+}
+
+// DepositKind is the sub-type of a deposit product.
+enum DepositKind {
+  DEPOSIT_KIND_UNSPECIFIED = 0;
+  DEPOSIT_KIND_SAVINGS     = 1;
+  DEPOSIT_KIND_CURRENT     = 2;
+  DEPOSIT_KIND_TERM        = 3; // fixed / recurring deposit
+}
+
+// InterestCalcMethod determines how interest accrues on a deposit product.
+enum InterestCalcMethod {
+  INTEREST_CALC_METHOD_UNSPECIFIED   = 0;
+  INTEREST_CALC_METHOD_DAILY_BALANCE = 1; // accrue on daily closing balance
+  INTEREST_CALC_METHOD_MIN_MONTHLY   = 2; // on minimum monthly balance (legacy)
+  INTEREST_CALC_METHOD_NONE          = 3; // non-interest-bearing (e.g. wallet)
+}
+
+// InterestType for loan products: whether the rate is locked or tracks a
+// benchmark.
+enum InterestType {
+  INTEREST_TYPE_UNSPECIFIED = 0;
+  INTEREST_TYPE_FIXED       = 1; // rate fixed for the tenure
+  INTEREST_TYPE_FLOATING    = 2; // rate tracks a benchmark + spread
+}
+
+// RateBenchmark is the external index a floating-rate loan tracks.
+enum RateBenchmark {
+  RATE_BENCHMARK_UNSPECIFIED = 0;
+  RATE_BENCHMARK_NONE        = 1; // used with FIXED interest type
+  RATE_BENCHMARK_REPO        = 2; // RBI repo rate
+  RATE_BENCHMARK_MCLR        = 3; // marginal cost of funds lending rate
+}
+
+// AmortizationMethod determines how loan repayments are structured.
+enum AmortizationMethod {
+  AMORTIZATION_METHOD_UNSPECIFIED      = 0;
+  AMORTIZATION_METHOD_REDUCING_BALANCE = 1; // EMI on reducing principal (standard)
+  AMORTIZATION_METHOD_FLAT             = 2; // flat-rate (rare, regulated)
+  AMORTIZATION_METHOD_BULLET           = 3; // interest periodic, principal at end
+}

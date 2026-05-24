@@ -1,0 +1,23 @@
+version: v2
+
+# The api/ directory is the proto module root. All imports in .proto files
+# (e.g. "common/v1/common.proto") resolve relative to this path.
+modules:
+  - path: api
+
+# External dependencies. buf.build/googleapis/googleapis supplies
+# google/api/annotations.proto (used by every service for HTTP bindings)
+# and google/api/http.proto. google/protobuf well-known types are built in.
+deps:
+  - buf.build/googleapis/googleapis
+
+lint:
+  use:
+    - DEFAULT
+  # Allow google.api.http annotations on RPCs (required for Kratos HTTP gateway).
+  except:
+    - RPC_REQUEST_RESPONSE_UNIQUE
+
+breaking:
+  use:
+    - FILE

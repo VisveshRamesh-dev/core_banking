@@ -1,0 +1,42 @@
+version: v2
+
+# Code generation pipeline for Kratos v2.
+# Each plugin writes into the project root with paths=source_relative so
+# generated files land next to their .proto sources:
+#
+#   api/common/v1/common.proto
+#     -> api/common/v1/common.pb.go          (protoc-gen-go)
+#     -> api/common/v1/common_grpc.pb.go     (protoc-gen-go-grpc)
+#     -> api/common/v1/common_http.pb.go     (protoc-gen-go-http)
+#     -> api/common/v1/common_errors.pb.go   (protoc-gen-go-errors, if applicable)
+#
+# Install all plugins once with:  make tools
+
+plugins:
+  # Go message types (structs, JSON marshal/unmarshal, proto reflection).
+  - local: protoc-gen-go
+    out: .
+    opt:
+      - paths=source_relative
+
+  # gRPC service interfaces and client/server stubs.
+  - local: protoc-gen-go-grpc
+    out: .
+    opt:
+      - paths=source_relative
+      # Keep generated server interfaces strict — forces explicit implementation.
+      - require_unimplemented_servers=false
+
+  # Kratos HTTP handler registration (maps google.api.http annotations to
+  # HTTP routes on the Kratos HTTP server — no separate gateway process needed).
+  - local: protoc-gen-go-http
+    out: .
+    opt:
+      - paths=source_relative
+
+  # Kratos error helpers — generates typed error constructors from ErrorReason
+  # enums so services can return errors.New(reason) with domain metadata.
+  - local: protoc-gen-go-errors
+    out: .
+    opt:
+      - paths=source_relative

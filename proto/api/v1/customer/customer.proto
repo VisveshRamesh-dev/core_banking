@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package customer.v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/customer;customerv1";
+
+// Customer is the core identity record. It owns NO money and NO accounts
+// directly — the Account service references a customer_id. Keeping identity
+// separate from accounts is a deliberate architectural boundary.
+//
+// The customer's type-specific information lives in the oneof `details` field:
+//   - individual: personal KYC data (date of birth, national ID, etc.)
+//   - business:   company registration, authorized representative info
+//
+// Validation requirements (enforced in biz layer):
+//   - phones must have at least one entry; exactly one must be is_primary = true
+//   - addresses must have at least one entry; exactly one must be is_primary = true
+//   - details must be set (one of individual or business)
+message Customer {
+  // Server-generated identifier (auto-increment bigint in PostgreSQL).
+  int64 id = 1;
+
+  // Mirrors which branch of details is set; stored for efficient filtering.
+  common.v1.CustomerType customer_type = 2;
+
+  // For INDIVIDUAL: the customer's own name.
+  // For BUSINESS: the primary authorized representative's name.
+  string first_name = 3;
+  string last_name = 4;
+  // Optional computed/display name (e.g. "Acme Corp — Jane Doe").
+  // If blank on create the server generates it as "{first_name} {last_name}".
+  string full_name = 5;
+
+  // Primary email address — used for notifications and account recovery.
+  // Required on onboarding.
+  string email = 6;
+
+  // At least one phone required. Exactly one must carry is_primary = true.
+  repeated common.v1.Phone phones = 7;
+
+  // At least one address required. Exactly one must carry is_primary = true.
+  repeated common.v1.Address addresses = 8;
+
+  common.v1.KYCStatus kyc_status = 9;
+
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+
+  // Type-specific KYC payload. Exactly one branch must be set; setting neither
+  // or both is rejected. The set branch determines customer_type.
+  oneof details {
+    IndividualDetails individual = 12;
+    BusinessDetails   business   = 13;
+  }
+}
+
+// IndividualDetails holds KYC fields specific to a natural person.
+message IndividualDetails {
+  // ISO 8601 date of birth, e.g. "1990-06-15".
+  string date_of_birth = 1;
+  // ISO 3166-1 alpha-2 nationality, e.g. "IN".
+  string nationality = 2;
+  // Government-issued primary ID number (Aadhaar, passport, SSN, etc.).
+  string national_id = 3;
+}
+
+// BusinessDetails holds KYC fields specific to a registered business entity.
+// The business must supply its own contact information AND the details of the
+// authorized representative (proprietor/director) who is accountable for the
+// account.
+//
+// Validation requirements (enforced in biz layer):
+//   - company_phones must have at least one entry
+//   - registered_addresses must have at least one entry
+//   - proprietor must be fully populated
+message BusinessDetails {
+  // Legal registered name of the company.
+  string company_name = 1;
+  // Company registration / incorporation number (e.g. CIN in India).
+  string registration_number = 2;
+  // Tax identification number (GST, TIN, EIN, etc.).
+  string tax_id = 3;
+
+  // Company-level contact phones.
+  // At least one required; exactly one must be is_primary = true.
+  repeated common.v1.Phone company_phones = 4;
+
+  // Company registered and/or correspondence addresses.
+  // At least one required; exactly one must be is_primary = true.
+  repeated common.v1.Address registered_addresses = 5;
+
+  // The authorized representative who is personally accountable.
+  ProprietorInfo proprietor = 6;
+}
+
+// ProprietorInfo identifies the natural person who owns or controls the
+// business and is personally responsible for the account relationship.
+message ProprietorInfo {
+  string first_name = 1;
+  string last_name = 2;
+  // Direct email for the proprietor (may differ from the company email).
+  string email = 3;
+  // At least one phone required.
+  repeated common.v1.Phone phones = 4;
+  // Government-issued primary ID of the proprietor.
+  string national_id = 5;
+}

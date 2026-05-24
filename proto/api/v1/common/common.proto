@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+// common/v1 holds types shared across every service. Defining them once here
+// keeps a multi-module system coherent — Money means the same thing in
+// Account, Ledger, and Transaction because they all import this one file.
+package common.v1;
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/common;commonv1";
+
+import "v1/common/enums.proto";
+
+// Money is always represented in integer minor units (paise, cents) plus an
+// ISO-4217 currency code. Floats are never used for money anywhere in the
+// system — this type enforces that at the contract level.
+message Money {
+  // Amount in the smallest indivisible unit of the currency.
+  // e.g. ₹1000.00 -> amount_minor = 100000 ; currency = "INR".
+  int64 amount_minor = 1;
+  // ISO-4217 currency code, e.g. "INR", "USD".
+  string currency = 2;
+}
+
+// PageRequest is the standard pagination input for List RPCs.
+message PageRequest {
+  // Max items to return (server caps this). 0 -> server default.
+  int32 page_size = 1;
+  // Opaque cursor from a previous response. Empty -> first page.
+  string page_token = 2;
+}
+
+// PageResponse carries the cursor for the next page.
+message PageResponse {
+  // Pass this as page_token in the next request. Empty -> no more pages.
+  string next_page_token = 1;
+  // Total matching records, if the server chooses to compute it.
+  int64 total_size = 2;
+}
+
+// Phone represents a single phone number with its classification.
+// A customer or contact must supply at least one phone entry.
+// is_primary marks the preferred number for outbound contact.
+message Phone {
+  PhoneType type = 1;
+  // E.164 country code prefix, e.g. "+91", "+1".
+  string country_code = 2;
+  // Local number without the country code, e.g. "9876543210".
+  string number = 3;
+  // Exactly one phone per contact set should have is_primary = true.
+  bool is_primary = 4;
+}
+
+// Address represents a postal address with its classification.
+// A customer must supply at least one address entry.
+// is_primary marks the address used for official correspondence by default.
+message Address {
+  AddressType type = 1;
+  string line1 = 2;
+  string line2 = 3;      // optional — apartment, suite, floor, etc.
+  string city = 4;
+  string state = 5;      // state, province, or region
+  string postal_code = 6;
+  // ISO 3166-1 alpha-2 country code, e.g. "IN", "US".
+  string country = 7;
+  bool is_primary = 8;
+}

@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package product.v1;
+
+import "google/api/annotations.proto";
+import "v1/product/product.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/product;productv1";
+
+// ProductService is the product catalog. It is a CONFIGURATION service used by
+// the bank's product team, not a money-moving service — so no idempotency keys
+// on writes here (a product create isn't a financial transaction).
+//
+// The Account service depends on Product: OpenAccount looks up the product to
+// validate eligibility and copy the terms onto the new account. Product never
+// depends on Account.
+service ProductService {
+  // CreateProduct adds a new product to the catalog in DRAFT status. The
+  // server validates that the config matches the class (a DEPOSIT product must
+  // carry deposit_config, a LOAN product loan_config).
+  rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse) {
+    option (google.api.http) = {
+      post: "/v1/products"
+      body: "*"
+    };
+  }
+
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
+    option (google.api.http) = {
+      get: "/v1/products/{id}"
+    };
+  }
+
+  // UpdateProductStatus moves a product through DRAFT -> ACTIVE -> RETIRED.
+  // Retiring a product stops new accounts but leaves existing ones running.
+  rpc UpdateProductStatus(UpdateProductStatusRequest) returns (UpdateProductStatusResponse) {
+    option (google.api.http) = {
+      patch: "/v1/products/{id}/status"
+      body: "*"
+    };
+  }
+
+  // ListProducts returns the catalog, optionally filtered by class and/or
+  // status (e.g. "all ACTIVE DEPOSIT products" for an account-opening UI).
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
+    option (google.api.http) = {
+      get: "/v1/products"
+    };
+  }
+}
+
+// ---- Request / Response messages ----
+
+// CreateProductRequest carries the full product definition.
+// The oneof config must match the class field — mismatch → VALIDATION_FAILED.
+message CreateProductRequest {
+  string                  code        = 1;
+  string                  name        = 2;
+  string                  description = 3;
+  common.v1.ProductClass  class       = 4;
+  // ISO-4217 currency code; fixed at creation time.
+  string                  currency    = 5;
+  oneof config {
+    DepositConfig deposit_config = 6;
+    LoanConfig    loan_config    = 7;
+  }
+}
+message CreateProductResponse {
+  Product product = 1;
+}
+
+message GetProductRequest {
+  int64 id = 1;
+}
+message GetProductResponse {
+  Product product = 1;
+}
+
+message UpdateProductStatusRequest {
+  int64                   id         = 1;
+  common.v1.ProductStatus new_status = 2;
+  string                  reason     = 3;
+}
+message UpdateProductStatusResponse {
+  Product product = 1;
+}
+
+message ListProductsRequest {
+  common.v1.ProductClass  class_filter  = 1; // UNSPECIFIED -> all classes
+  common.v1.ProductStatus status_filter = 2; // UNSPECIFIED -> all statuses
+  common.v1.PageRequest   page          = 3;
+}
+message ListProductsResponse {
+  repeated Product        products = 1;
+  common.v1.PageResponse  page     = 2;
+}

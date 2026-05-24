@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package customer.v1;
+
+import "google/api/annotations.proto";
+import "v1/customer/customer.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/customer;customerv1";
+
+// CustomerService manages the customer identity lifecycle.
+//
+// Every RPC carries a google.api.http annotation so buf generate emits both
+// a gRPC server (used internally, service-to-service) and a REST/JSON gateway
+// (exposed at the edge) from this single contract.
+service CustomerService {
+  // Onboard creates a new customer in PENDING status and kicks off KYC.
+  // The request must include type-specific details via the details oneof;
+  // omitting it or setting both branches is rejected (VALIDATION_FAILED).
+  // At least one phone and one address are required.
+  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
+    option (google.api.http) = {
+      post: "/v1/customers"
+      body: "*"
+    };
+  }
+
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse) {
+    option (google.api.http) = {
+      get: "/v1/customers/{id}"
+    };
+  }
+
+  // UpdateKYCStatus transitions a customer through the KYC lifecycle.
+  // The requested transition is validated against the state machine;
+  // illegal moves (e.g. CLOSED → ACTIVE) are rejected (ILLEGAL_TRANSITION).
+  rpc UpdateKYCStatus(UpdateKYCStatusRequest) returns (UpdateKYCStatusResponse) {
+    option (google.api.http) = {
+      patch: "/v1/customers/{id}/kyc-status"
+      body: "*"
+    };
+  }
+
+  // CloseCustomer moves a customer to the terminal CLOSED status.
+  // No hard delete — records are retained for regulatory compliance.
+  rpc CloseCustomer(CloseCustomerRequest) returns (CloseCustomerResponse) {
+    option (google.api.http) = {
+      post: "/v1/customers/{id}:close"
+      body: "*"
+    };
+  }
+
+  // ListCustomers returns a paginated list, optionally filtered by KYC status
+  // and/or customer type.
+  rpc ListCustomers(ListCustomersRequest) returns (ListCustomersResponse) {
+    option (google.api.http) = {
+      get: "/v1/customers"
+    };
+  }
+}
+
+// ---- Request / Response messages ----
+
+// OnboardRequest carries everything needed to open a customer record.
+// The oneof details field determines the customer type; exactly one branch
+// must be populated. The server sets customer_type on the created Customer
+// based on which branch is set.
+//
+// Validation (enforced in biz layer):
+//   - first_name, last_name, email: required
+//   - phones: at least one entry; exactly one is_primary = true
+//   - addresses: at least one entry; exactly one is_primary = true
+//   - details: exactly one branch must be set
+message OnboardRequest {
+  string first_name = 1;
+  string last_name = 2;
+  // Optional. If blank the server generates "{first_name} {last_name}".
+  string full_name = 3;
+  string email = 4;
+  repeated common.v1.Phone   phones    = 5;
+  repeated common.v1.Address addresses = 6;
+
+  oneof details {
+    IndividualDetails individual = 7;
+    BusinessDetails   business   = 8;
+  }
+}
+message OnboardResponse {
+  Customer customer = 1;
+}
+
+message GetCustomerRequest {
+  int64 id = 1;
+}
+message GetCustomerResponse {
+  Customer customer = 1;
+}
+
+message UpdateKYCStatusRequest {
+  int64               id         = 1;
+  common.v1.KYCStatus new_status = 2; // transition validated server-side
+  string              reason     = 3; // audit note for the transition
+}
+message UpdateKYCStatusResponse {
+  Customer customer = 1;
+}
+
+message CloseCustomerRequest {
+  int64  id     = 1;
+  string reason = 2;
+}
+message CloseCustomerResponse {
+  Customer customer = 1;
+}
+
+message ListCustomersRequest {
+  // Optional filters. UNSPECIFIED means "all values".
+  common.v1.KYCStatus    status_filter = 1;
+  common.v1.CustomerType type_filter   = 2;
+  common.v1.PageRequest  page          = 3;
+}
+message ListCustomersResponse {
+  repeated Customer      customers = 1;
+  common.v1.PageResponse page      = 2;
+}

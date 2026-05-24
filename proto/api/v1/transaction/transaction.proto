@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package transaction.v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common/common.proto";
+import "v1/common/enums.proto";
+
+option go_package = "github.com/visvesh-ramesh/corebank/v1/transaction;transactionv1";
+
+// Transaction is the customer-facing orchestration record of a money operation.
+// It references the underlying ledger transaction once posted. The authoritative
+// money movement lives in the Ledger; this is the saga coordination record.
+//
+// from_account_id and to_account_id are optional because:
+//   DEPOSIT has no from_account (external source)
+//   WITHDRAWAL has no to_account (external destination)
+// ledger_transaction_id is optional until the ledger step completes.
+message Transaction {
+  int64 id = 1;
+
+  common.v1.TransactionKind  kind  = 2;
+  common.v1.TransactionState state = 3;
+
+  optional int64 from_account_id = 4; // empty for DEPOSIT
+  optional int64 to_account_id   = 5; // empty for WITHDRAWAL
+
+  common.v1.Money amount = 6;
+
+  string idempotency_key = 7;
+
+  // Set once the Ledger has successfully posted the transaction.
+  optional int64 ledger_transaction_id = 8;
+
+  // Populated when state == FAILED; describes why the saga was not completed.
+  string failure_reason = 9;
+
+  google.protobuf.Timestamp created_at   = 10;
+  google.protobuf.Timestamp completed_at = 11;
+}
