@@ -24,6 +24,7 @@ init:
 	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
 	go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
 	go install github.com/google/wire/cmd/wire@latest
+	go install gorm.io/gen/tools/gentool@latest
 
 .PHONY: config
 # generate internal proto
@@ -43,6 +44,19 @@ api:
  	       --go-grpc_out=paths=source_relative:./api \
 	       --openapi_out=fq_schema_naming=true,default_response=false:. \
 	       $(API_PROTO_FILES)
+
+.PHONY: model
+# generate GORM models from postgres tables
+model:
+	gentool \
+		-db postgres \
+		-dsn "host=localhost user=corebank password=corebank dbname=corebank port=5432 sslmode=disable" \
+		--tables "customers,customer_phones,customer_addresses,customer_individual_details,customer_business_details,business_phones,business_addresses,business_proprietors,proprietor_phones" \
+		-onlyModel \
+		-fieldNullable \
+		-fieldWithIndexTag \
+		-fieldWithTypeTag \
+		-outPath ./internal/model
 
 .PHONY: build
 # build
