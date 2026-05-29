@@ -1,0 +1,19 @@
+server:
+  http:
+    addr: 0.0.0.0:8002
+    timeout: 1s
+  grpc:
+    addr: 0.0.0.0:9002
+    timeout: 1s
+data:
+  database:
+    host: localhost
+    port: 5432
+    user: corebank
+    password: corebank
+    dbname: corebank
+    sslmode: disable
+    timezone: Asia/Kolkata
+clients:
+  customer_addr: "localhost:9000"
+  ledger_addr: "localhost:9001"
