@@ -6,4 +6,5 @@ use (
 	./ledger
 	./proto
 	./transaction
+	./utils
 )

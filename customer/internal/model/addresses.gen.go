@@ -8,7 +8,7 @@ const TableNameAddress = "addresses"
 
 // Address mapped from table <addresses>
 type Address struct {
-	ID          int64   `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
+	ID          int64   `gorm:"column:id;type:bigint;primaryKey" json:"id"`
 	AddressType int16   `gorm:"column:address_type;type:smallint;not null" json:"address_type"`
 	Line1       string  `gorm:"column:line1;type:character varying(255);not null" json:"line1"`
 	Line2       *string `gorm:"column:line2;type:character varying(255)" json:"line2"`

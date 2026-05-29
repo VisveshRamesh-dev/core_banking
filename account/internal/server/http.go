@@ -1,9 +1,11 @@
 package server
 
 import (
-	accountv1 "github.com/visvesh-ramesh/corebank/v1/account"
 	"account/internal/conf"
 	"account/internal/service"
+	utmw "utils/middleware"
+
+	accountv1 "github.com/visvesh-ramesh/corebank/v1/account"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
@@ -12,7 +14,11 @@ import (
 
 func NewHTTPServer(c *conf.Server, svc *service.AccountService, logger log.Logger) *http.Server {
 	var opts = []http.ServerOption{
-		http.Middleware(recovery.Recovery()),
+		http.Middleware(
+			recovery.Recovery(),
+			utmw.RequestID(),
+			utmw.Logging(logger),
+		),
 	}
 	if c.Http.Network != "" {
 		opts = append(opts, http.Network(c.Http.Network))

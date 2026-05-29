@@ -3,7 +3,7 @@ package model
 import "time"
 
 type Transaction struct {
-	ID                   int64      `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true"`
+	ID                   int64      `gorm:"column:id;type:bigint;primaryKey"`
 	Kind                 int16      `gorm:"column:kind;type:smallint;not null"`
 	State                int16      `gorm:"column:state;type:smallint;not null;default:1"`
 	FromAccountID        *int64     `gorm:"column:from_account_id;type:bigint"`

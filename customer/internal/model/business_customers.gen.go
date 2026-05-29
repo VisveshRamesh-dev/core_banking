@@ -8,7 +8,7 @@ const TableNameBusinessCustomer = "business_customers"
 
 // BusinessCustomer mapped from table <business_customers>
 type BusinessCustomer struct {
-	ID                 int64   `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
+	ID                 int64   `gorm:"column:id;type:bigint;primaryKey" json:"id"`
 	CompanyName        string  `gorm:"column:company_name;type:character varying(255);not null" json:"company_name"`
 	RegistrationNumber *string `gorm:"column:registration_number;type:character varying(100)" json:"registration_number"`
 	TaxID              *string `gorm:"column:tax_id;type:character varying(100)" json:"tax_id"`

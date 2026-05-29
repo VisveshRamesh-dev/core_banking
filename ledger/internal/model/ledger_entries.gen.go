@@ -8,7 +8,7 @@ const TableNameLedgerEntry = "ledger_entries"
 
 // LedgerEntry mapped from table <ledger_entries>
 type LedgerEntry struct {
-	ID            int64  `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
+	ID            int64  `gorm:"column:id;type:bigint;primaryKey" json:"id"`
 	TransactionID int64  `gorm:"column:transaction_id;type:bigint;not null;index:idx_ledger_entries_transaction_id,priority:1" json:"transaction_id"`
 	AccountID     int64  `gorm:"column:account_id;type:bigint;not null;index:idx_ledger_entries_account_id,priority:1" json:"account_id"`
 	Direction     int16  `gorm:"column:direction;type:smallint;not null" json:"direction"`

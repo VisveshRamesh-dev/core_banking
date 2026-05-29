@@ -1,9 +1,11 @@
 package server
 
 import (
-	v1 "github.com/visvesh-ramesh/corebank/v1/customer"
 	"customer/internal/conf"
 	"customer/internal/service"
+	utmw "utils/middleware"
+
+	v1 "github.com/visvesh-ramesh/corebank/v1/customer"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
@@ -15,6 +17,8 @@ func NewGRPCServer(c *conf.Server, svc *service.CustomerService, logger log.Logg
 	var opts = []grpc.ServerOption{
 		grpc.Middleware(
 			recovery.Recovery(),
+			utmw.RequestID(),
+			utmw.Logging(logger),
 		),
 	}
 	if c.Grpc.Network != "" {

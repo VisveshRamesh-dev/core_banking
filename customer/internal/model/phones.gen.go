@@ -8,7 +8,7 @@ const TableNamePhone = "phones"
 
 // Phone mapped from table <phones>
 type Phone struct {
-	ID          int64  `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
+	ID          int64  `gorm:"column:id;type:bigint;primaryKey" json:"id"`
 	PhoneType   int16  `gorm:"column:phone_type;type:smallint;not null" json:"phone_type"`
 	CountryCode string `gorm:"column:country_code;type:character varying(8);not null" json:"country_code"`
 	Number      string `gorm:"column:number;type:character varying(30);not null" json:"number"`

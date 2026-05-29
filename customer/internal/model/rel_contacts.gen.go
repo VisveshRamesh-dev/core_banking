@@ -8,7 +8,7 @@ const TableNameRelContact = "rel_contact"
 
 // RelContact mapped from table <rel_contact>
 type RelContact struct {
-	ID          int64 `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
+	ID          int64 `gorm:"column:id;type:bigint;primaryKey" json:"id"`
 	ContactID   int64 `gorm:"column:contact_id;type:bigint;not null;index:idx_rel_contact_contact,priority:1" json:"contact_id"`
 	ContactType int16 `gorm:"column:contact_type;type:smallint;not null;index:idx_rel_contact_contact,priority:2" json:"contact_type"`
 	LinkID      int64 `gorm:"column:link_id;type:bigint;not null;index:idx_rel_contact_link,priority:1" json:"link_id"`
