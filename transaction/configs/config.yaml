@@ -1,0 +1,23 @@
+server:
+  http:
+    addr: 0.0.0.0:8003
+    timeout: 5s
+  grpc:
+    addr: 0.0.0.0:9003
+    timeout: 5s
+data:
+  database:
+    host: localhost
+    port: 5432
+    user: corebank
+    password: corebank
+    dbname: corebank
+    sslmode: disable
+    timezone: Asia/Kolkata
+clients:
+  account_addr: "localhost:9002"
+  ledger_addr: "localhost:9001"
+app:
+  # Ledger account ID used as the counterpart for deposits and withdrawals.
+  # This account must be seeded in the ledger before processing externally-sourced movements.
+  settlement_account_id: 1
