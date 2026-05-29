@@ -12,18 +12,20 @@ import (
 // ErrNotFound is returned when a requested record does not exist.
 var ErrNotFound = errors.New("record not found")
 
-// CustomerRecord bundles a customer with all of its related rows so the
-// handler layer never needs to issue multiple repo calls.
+// CustomerRecord bundles a customer with all related rows so the handler
+// layer never needs to issue multiple repo calls.
 type CustomerRecord struct {
 	Customer   model.Customer
-	Phones     []model.CustomerPhone
-	Addresses  []model.CustomerAddress
-	Individual *model.CustomerIndividualDetail
-	Business   *model.CustomerBusinessDetail
-	BizPhones  []model.BusinessPhone
-	BizAddrs   []model.BusinessAddress
-	Proprietor *model.BusinessProprietor
-	PropPhones []model.ProprietorPhone
+	Individual *model.IndividualCustomer
+	Business   *model.BusinessCustomer
+	// Individual contacts (link_type = LinkTypeIndividual)
+	Phones    []model.Phone
+	Addresses []model.Address
+	// Business company contacts (link_type = LinkTypeBusiness)
+	BizPhones []model.Phone
+	BizAddrs  []model.Address
+	// Proprietor contacts (link_type = LinkTypeProprietor)
+	PropPhones []model.Phone
 }
 
 // CustomerRepo is the only data-access object for the customer aggregate.
@@ -36,84 +38,38 @@ func NewCustomerRepo(data *Data) *CustomerRepo {
 }
 
 // Create persists a full customer aggregate in a single transaction.
-// All IDs (customer_id, business_id, proprietor_id) inside rec are
-// back-filled from database-generated values before the function returns.
+// All generated IDs (individual_id, business_id) are back-filled into rec
+// before the function returns.
 func (r *CustomerRepo) Create(ctx context.Context, rec *CustomerRecord) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&rec.Customer).Error; err != nil {
-			return err
-		}
-		cid := rec.Customer.ID
-
-		for i := range rec.Phones {
-			rec.Phones[i].CustomerID = cid
-		}
-		if len(rec.Phones) > 0 {
-			if err := tx.Create(&rec.Phones).Error; err != nil {
-				return err
-			}
-		}
-
-		for i := range rec.Addresses {
-			rec.Addresses[i].CustomerID = cid
-		}
-		if len(rec.Addresses) > 0 {
-			if err := tx.Create(&rec.Addresses).Error; err != nil {
-				return err
-			}
-		}
-
 		if rec.Individual != nil {
-			rec.Individual.CustomerID = cid
 			if err := tx.Create(rec.Individual).Error; err != nil {
+				return err
+			}
+			id := rec.Individual.ID
+			rec.Customer.IndividualID = &id
+
+			if err := r.insertContacts(tx, rec.Individual.ID, model.LinkTypeIndividual, rec.Phones, rec.Addresses); err != nil {
 				return err
 			}
 		}
 
 		if rec.Business != nil {
-			rec.Business.CustomerID = cid
 			if err := tx.Create(rec.Business).Error; err != nil {
 				return err
 			}
 			bid := rec.Business.ID
+			rec.Customer.BusinessID = &bid
 
-			for i := range rec.BizPhones {
-				rec.BizPhones[i].BusinessID = bid
+			if err := r.insertContacts(tx, bid, model.LinkTypeBusiness, rec.BizPhones, rec.BizAddrs); err != nil {
+				return err
 			}
-			if len(rec.BizPhones) > 0 {
-				if err := tx.Create(&rec.BizPhones).Error; err != nil {
-					return err
-				}
-			}
-
-			for i := range rec.BizAddrs {
-				rec.BizAddrs[i].BusinessID = bid
-			}
-			if len(rec.BizAddrs) > 0 {
-				if err := tx.Create(&rec.BizAddrs).Error; err != nil {
-					return err
-				}
-			}
-
-			if rec.Proprietor != nil {
-				rec.Proprietor.BusinessID = bid
-				if err := tx.Create(rec.Proprietor).Error; err != nil {
-					return err
-				}
-				pid := rec.Proprietor.ID
-
-				for i := range rec.PropPhones {
-					rec.PropPhones[i].ProprietorID = pid
-				}
-				if len(rec.PropPhones) > 0 {
-					if err := tx.Create(&rec.PropPhones).Error; err != nil {
-						return err
-					}
-				}
+			if err := r.insertContacts(tx, bid, model.LinkTypeProprietor, rec.PropPhones, nil); err != nil {
+				return err
 			}
 		}
 
-		return nil
+		return tx.Create(&rec.Customer).Error
 	})
 }
 
@@ -129,16 +85,16 @@ func (r *CustomerRepo) GetByID(ctx context.Context, id int64) (*CustomerRecord, 
 	return r.loadRelated(ctx, c)
 }
 
-// UpdateKYCStatus sets kyc_status on the customer row and returns the full record.
+// UpdateKYCStatus sets kyc_status and returns the refreshed full record.
 func (r *CustomerRepo) UpdateKYCStatus(ctx context.Context, id int64, newStatus int16) (*CustomerRecord, error) {
-	result := r.db.WithContext(ctx).
+	res := r.db.WithContext(ctx).
 		Model(&model.Customer{}).
 		Where("id = ?", id).
 		Update("kyc_status", newStatus)
-	if result.Error != nil {
-		return nil, result.Error
+	if res.Error != nil {
+		return nil, res.Error
 	}
-	if result.RowsAffected == 0 {
+	if res.RowsAffected == 0 {
 		return nil, ErrNotFound
 	}
 	return r.GetByID(ctx, id)
@@ -183,49 +139,122 @@ func (r *CustomerRepo) List(ctx context.Context, p ListParams) ([]*CustomerRecor
 	return records, total, nil
 }
 
-// loadRelated fetches all related rows for a customer record.
+// ── private helpers ───────────────────────────────────────────────────────────
+
+// insertContacts inserts phone and address rows, then creates rel_contact links.
+func (r *CustomerRepo) insertContacts(
+	tx *gorm.DB,
+	linkID int64,
+	linkType int16,
+	phones []model.Phone,
+	addresses []model.Address,
+) error {
+	for i := range phones {
+		if err := tx.Create(&phones[i]).Error; err != nil {
+			return err
+		}
+		link := model.RelContact{
+			ContactID:   phones[i].ID,
+			ContactType: model.ContactTypePhone,
+			LinkID:      linkID,
+			LinkType:    linkType,
+		}
+		if err := tx.Create(&link).Error; err != nil {
+			return err
+		}
+	}
+	for i := range addresses {
+		if err := tx.Create(&addresses[i]).Error; err != nil {
+			return err
+		}
+		link := model.RelContact{
+			ContactID:   addresses[i].ID,
+			ContactType: model.ContactTypeAddress,
+			LinkID:      linkID,
+			LinkType:    linkType,
+		}
+		if err := tx.Create(&link).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadRelated fetches all related rows for a customer.
 func (r *CustomerRepo) loadRelated(ctx context.Context, c model.Customer) (*CustomerRecord, error) {
 	rec := &CustomerRecord{Customer: c}
-	cid := c.ID
 
-	if err := r.db.WithContext(ctx).Where("customer_id = ?", cid).Find(&rec.Phones).Error; err != nil {
-		return nil, err
-	}
-	if err := r.db.WithContext(ctx).Where("customer_id = ?", cid).Find(&rec.Addresses).Error; err != nil {
-		return nil, err
-	}
-
-	var ind model.CustomerIndividualDetail
-	if err := r.db.WithContext(ctx).Where("customer_id = ?", cid).First(&ind).Error; err == nil {
+	if c.IndividualID != nil {
+		var ind model.IndividualCustomer
+		if err := r.db.WithContext(ctx).First(&ind, *c.IndividualID).Error; err != nil {
+			return nil, err
+		}
 		rec.Individual = &ind
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+
+		phones, addrs, err := r.loadContacts(ctx, *c.IndividualID, model.LinkTypeIndividual)
+		if err != nil {
+			return nil, err
+		}
+		rec.Phones = phones
+		rec.Addresses = addrs
 	}
 
-	var biz model.CustomerBusinessDetail
-	if err := r.db.WithContext(ctx).Where("customer_id = ?", cid).First(&biz).Error; err == nil {
+	if c.BusinessID != nil {
+		var biz model.BusinessCustomer
+		if err := r.db.WithContext(ctx).First(&biz, *c.BusinessID).Error; err != nil {
+			return nil, err
+		}
 		rec.Business = &biz
-		bid := biz.ID
 
-		if err := r.db.WithContext(ctx).Where("business_id = ?", bid).Find(&rec.BizPhones).Error; err != nil {
+		bizPhones, bizAddrs, err := r.loadContacts(ctx, *c.BusinessID, model.LinkTypeBusiness)
+		if err != nil {
 			return nil, err
 		}
-		if err := r.db.WithContext(ctx).Where("business_id = ?", bid).Find(&rec.BizAddrs).Error; err != nil {
-			return nil, err
-		}
+		rec.BizPhones = bizPhones
+		rec.BizAddrs = bizAddrs
 
-		var prop model.BusinessProprietor
-		if err := r.db.WithContext(ctx).Where("business_id = ?", bid).First(&prop).Error; err == nil {
-			rec.Proprietor = &prop
-			if err := r.db.WithContext(ctx).Where("proprietor_id = ?", prop.ID).Find(&rec.PropPhones).Error; err != nil {
-				return nil, err
-			}
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		propPhones, _, err := r.loadContacts(ctx, *c.BusinessID, model.LinkTypeProprietor)
+		if err != nil {
 			return nil, err
 		}
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+		rec.PropPhones = propPhones
 	}
 
 	return rec, nil
+}
+
+// loadContacts queries rel_contact for a given owner, then fetches each phone/address.
+func (r *CustomerRepo) loadContacts(ctx context.Context, linkID int64, linkType int16) ([]model.Phone, []model.Address, error) {
+	var links []model.RelContact
+	if err := r.db.WithContext(ctx).
+		Where("link_id = ? AND link_type = ?", linkID, linkType).
+		Find(&links).Error; err != nil {
+		return nil, nil, err
+	}
+
+	var phoneIDs, addrIDs []int64
+	for _, l := range links {
+		switch l.ContactType {
+		case model.ContactTypePhone:
+			phoneIDs = append(phoneIDs, l.ContactID)
+		case model.ContactTypeAddress:
+			addrIDs = append(addrIDs, l.ContactID)
+		}
+	}
+
+	var phones []model.Phone
+	if len(phoneIDs) > 0 {
+		if err := r.db.WithContext(ctx).Where("id IN ?", phoneIDs).Find(&phones).Error; err != nil {
+			return nil, nil, err
+		}
+	}
+
+	var addresses []model.Address
+	if len(addrIDs) > 0 {
+		if err := r.db.WithContext(ctx).Where("id IN ?", addrIDs).Find(&addresses).Error; err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return phones, addresses, nil
 }

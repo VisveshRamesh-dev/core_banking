@@ -4,19 +4,15 @@
 
 package model
 
-const TableNameBusinessPhone = "business_phones"
+const TableNamePhone = "phones"
 
-// BusinessPhone mapped from table <business_phones>
-type BusinessPhone struct {
+// Phone mapped from table <phones>
+type Phone struct {
 	ID          int64  `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
-	BusinessID  int64  `gorm:"column:business_id;type:bigint;not null;index:idx_business_phones_business_id,priority:1" json:"business_id"`
 	PhoneType   int16  `gorm:"column:phone_type;type:smallint;not null" json:"phone_type"`
 	CountryCode string `gorm:"column:country_code;type:character varying(8);not null" json:"country_code"`
 	Number      string `gorm:"column:number;type:character varying(30);not null" json:"number"`
 	IsPrimary   bool   `gorm:"column:is_primary;type:boolean;not null" json:"is_primary"`
 }
 
-// TableName BusinessPhone's table name
-func (*BusinessPhone) TableName() string {
-	return TableNameBusinessPhone
-}
+func (*Phone) TableName() string { return TableNamePhone }

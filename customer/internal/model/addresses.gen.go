@@ -4,12 +4,11 @@
 
 package model
 
-const TableNameBusinessAddress = "business_addresses"
+const TableNameAddress = "addresses"
 
-// BusinessAddress mapped from table <business_addresses>
-type BusinessAddress struct {
+// Address mapped from table <addresses>
+type Address struct {
 	ID          int64   `gorm:"column:id;type:bigint;primaryKey;autoIncrement:true" json:"id"`
-	BusinessID  int64   `gorm:"column:business_id;type:bigint;not null;index:idx_business_addresses_business_id,priority:1" json:"business_id"`
 	AddressType int16   `gorm:"column:address_type;type:smallint;not null" json:"address_type"`
 	Line1       string  `gorm:"column:line1;type:character varying(255);not null" json:"line1"`
 	Line2       *string `gorm:"column:line2;type:character varying(255)" json:"line2"`
@@ -20,7 +19,4 @@ type BusinessAddress struct {
 	IsPrimary   bool    `gorm:"column:is_primary;type:boolean;not null" json:"is_primary"`
 }
 
-// TableName BusinessAddress's table name
-func (*BusinessAddress) TableName() string {
-	return TableNameBusinessAddress
-}
+func (*Address) TableName() string { return TableNameAddress }

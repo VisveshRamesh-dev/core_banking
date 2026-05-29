@@ -4,9 +4,7 @@
 
 package model
 
-import (
-	"time"
-)
+import "time"
 
 const TableNameCustomer = "customers"
 
@@ -19,11 +17,10 @@ type Customer struct {
 	FullName     *string   `gorm:"column:full_name;type:character varying(255)" json:"full_name"`
 	Email        string    `gorm:"column:email;type:character varying(255);not null;uniqueIndex:idx_customers_email,priority:1" json:"email"`
 	KycStatus    int16     `gorm:"column:kyc_status;type:smallint;not null;index:idx_customers_kyc_status,priority:1" json:"kyc_status"`
+	IndividualID *int64    `gorm:"column:individual_id;type:bigint" json:"individual_id"`
+	BusinessID   *int64    `gorm:"column:business_id;type:bigint" json:"business_id"`
 	CreatedAt    time.Time `gorm:"column:created_at;type:timestamptz;not null;default:now()" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;type:timestamptz;not null;default:now()" json:"updated_at"`
 }
 
-// TableName Customer's table name
-func (*Customer) TableName() string {
-	return TableNameCustomer
-}
+func (*Customer) TableName() string { return TableNameCustomer }

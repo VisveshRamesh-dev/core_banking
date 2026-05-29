@@ -51,7 +51,7 @@ model:
 	gentool \
 		-db postgres \
 		-dsn "host=localhost user=corebank password=corebank dbname=corebank port=5432 sslmode=disable" \
-		--tables "customers,customer_phones,customer_addresses,customer_individual_details,customer_business_details,business_phones,business_addresses,business_proprietors,proprietor_phones" \
+		--tables "customers,individual_customers,business_customers,phones,addresses,rel_contact" \
 		-onlyModel \
 		-fieldNullable \
 		-fieldWithIndexTag \

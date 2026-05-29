@@ -17,8 +17,11 @@ const defaultPageSize = 20
 
 func (h *CustomerHandler) ListCustomers(ctx context.Context, req *v1.ListCustomersRequest) (*v1.ListCustomersResponse, error) {
 	pageSize := int(req.GetPage().GetPageSize())
-	if pageSize <= 0 || pageSize > 100 {
+	switch {
+	case pageSize <= 0:
 		pageSize = defaultPageSize
+	case pageSize > 100:
+		pageSize = 100
 	}
 
 	offset := 0
@@ -39,9 +42,11 @@ func (h *CustomerHandler) ListCustomers(ctx context.Context, req *v1.ListCustome
 	customers := make([]*v1.Customer, len(records))
 	for i, rec := range records {
 		customers[i] = mapper.CustomerToProto(
-			rec.Customer, rec.Phones, rec.Addresses,
+			rec.Customer,
 			rec.Individual, rec.Business,
-			rec.BizPhones, rec.BizAddrs, rec.Proprietor, rec.PropPhones,
+			rec.Phones, rec.Addresses,
+			rec.BizPhones, rec.BizAddrs,
+			rec.PropPhones,
 		)
 	}
 

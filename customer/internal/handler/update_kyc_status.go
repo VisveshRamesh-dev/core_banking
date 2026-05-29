@@ -46,9 +46,11 @@ func (h *CustomerHandler) UpdateKYCStatus(ctx context.Context, req *v1.UpdateKYC
 	}
 
 	proto := mapper.CustomerToProto(
-		rec.Customer, rec.Phones, rec.Addresses,
+		rec.Customer,
 		rec.Individual, rec.Business,
-		rec.BizPhones, rec.BizAddrs, rec.Proprietor, rec.PropPhones,
+		rec.Phones, rec.Addresses,
+		rec.BizPhones, rec.BizAddrs,
+		rec.PropPhones,
 	)
 	return &v1.UpdateKYCStatusResponse{Customer: proto}, nil
 }

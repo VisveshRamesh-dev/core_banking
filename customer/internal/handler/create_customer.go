@@ -15,36 +15,33 @@ func (h *CustomerHandler) Onboard(ctx context.Context, req *v1.OnboardRequest) (
 	if req.FirstName == "" || req.LastName == "" || req.Email == "" {
 		return nil, status.Error(codes.InvalidArgument, "first_name, last_name, and email are required")
 	}
-	if len(req.Phones) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "at least one phone is required")
-	}
-	if len(req.Addresses) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "at least one address is required")
-	}
 	if req.GetIndividual() == nil && req.GetBusiness() == nil {
 		return nil, status.Error(codes.InvalidArgument, "exactly one of individual or business details must be set")
 	}
-
-	cust := mapper.OnboardRequestToCustomer(req)
-	phones := mapper.PhonesToCustomerModels(req.Phones, 0)
-	addrs := mapper.AddressesToCustomerModels(req.Addresses, 0)
-
-	rec := &data.CustomerRecord{
-		Customer:  cust,
-		Phones:    phones,
-		Addresses: addrs,
+	if req.GetIndividual() != nil && (len(req.Phones) == 0 || len(req.Addresses) == 0) {
+		return nil, status.Error(codes.InvalidArgument, "individual customers require at least one phone and one address")
+	}
+	if b := req.GetBusiness(); b != nil {
+		if len(b.CompanyPhones) == 0 || len(b.RegisteredAddresses) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "business customers require at least one company phone and one registered address")
+		}
+		if b.Proprietor == nil {
+			return nil, status.Error(codes.InvalidArgument, "business customers require proprietor information")
+		}
 	}
 
-	if req.GetIndividual() != nil {
-		ind := mapper.IndividualToModel(req.GetIndividual(), 0)
-		rec.Individual = &ind
-	} else {
-		detail, bizPhones, bizAddrs, prop, propPhones := mapper.BusinessToModels(req.GetBusiness(), 0)
-		rec.Business = &detail
-		rec.BizPhones = bizPhones
-		rec.BizAddrs = bizAddrs
-		rec.Proprietor = &prop
-		rec.PropPhones = propPhones
+	cust, individual, business, phones, addresses, bizPhones, bizAddrs, propPhones :=
+		mapper.OnboardRequestToModels(req)
+
+	rec := &data.CustomerRecord{
+		Customer:   cust,
+		Individual: individual,
+		Business:   business,
+		Phones:     phones,
+		Addresses:  addresses,
+		BizPhones:  bizPhones,
+		BizAddrs:   bizAddrs,
+		PropPhones: propPhones,
 	}
 
 	if err := h.customerRepo.Create(ctx, rec); err != nil {
@@ -52,9 +49,11 @@ func (h *CustomerHandler) Onboard(ctx context.Context, req *v1.OnboardRequest) (
 	}
 
 	proto := mapper.CustomerToProto(
-		rec.Customer, rec.Phones, rec.Addresses,
+		rec.Customer,
 		rec.Individual, rec.Business,
-		rec.BizPhones, rec.BizAddrs, rec.Proprietor, rec.PropPhones,
+		rec.Phones, rec.Addresses,
+		rec.BizPhones, rec.BizAddrs,
+		rec.PropPhones,
 	)
 	return &v1.OnboardResponse{Customer: proto}, nil
 }
